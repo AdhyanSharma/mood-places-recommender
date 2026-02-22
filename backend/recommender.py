@@ -2,7 +2,7 @@ import requests
 
 MOOD_TAGS = {
     "happy": ["cafe", "restaurant", "park"],
-    "sad": ["park", "library", "temple"],
+    "sad": ["park", "library", "place_of_worship"],
     "romantic": ["restaurant", "park", "viewpoint"],
     "adventure": ["park", "trail"],
 }
@@ -10,41 +10,39 @@ MOOD_TAGS = {
 
 def get_places(mood, lat=None, lon=None, user="default"):
 
-    if not lat or not lon:
+    if lat is None or lon is None:
         return []
 
     tags = MOOD_TAGS.get(mood.lower(), ["park"])
-
     places = []
 
     for tag in tags:
 
         query = f"""
         [out:json];
-        node(around:2000,{lat},{lon})["amenity"="{tag}"];
+        node(around:4000,{lat},{lon})["amenity"="{tag}"];
         out;
         """
 
-       try:
-    response = requests.post(
-        "https://overpass-api.de/api/interpreter",
-        data=query,
-        timeout=20,
-        headers={"User-Agent": "MoodPlacesApp/1.0"},
-    )
+        try:
+            response = requests.post(
+                "https://overpass-api.de/api/interpreter",
+                data=query,
+                timeout=20,
+                headers={"User-Agent": "MoodPlacesApp/1.0"},
+            )
 
-    if response.status_code != 200:
-        return []
+            if response.status_code != 200:
+                continue
 
-    if not response.text.strip():
-        return []
+            if not response.text.strip():
+                continue
 
-    data = response.json()
+            data = response.json()
 
-except Exception as e:
-    print("Overpass API error:", e)
-    return []
-        data = response.json()
+        except Exception as e:
+            print("Overpass API error:", e)
+            continue
 
         for item in data.get("elements", []):
             name = item.get("tags", {}).get("name")
