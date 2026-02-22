@@ -5,7 +5,7 @@ from textblob import TextBlob
 
 app = FastAPI()
 
-# Allow React connection
+# Allow frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,11 +14,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Root
 @app.get("/")
 def home():
     return {"message": "Mood Places API Running"}
 
-# Mood Recommendation + Location
+# Health endpoint (for warmup + uptime robot)
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# Recommend places
 @app.get("/recommend/{mood}")
 def recommend(mood: str, lat: float = None, lon: float = None):
     results = get_places(mood, lat, lon)
@@ -38,6 +44,3 @@ def detect_mood(text: str):
         mood = "romantic"
 
     return {"mood": mood}
-@app.get("/health")
-def health():
-    return {"status": "ok"}
