@@ -25,11 +25,25 @@ def get_places(mood, lat=None, lon=None, user="default"):
         out;
         """
 
-        response = requests.post(
-            "https://overpass-api.de/api/interpreter",
-            data=query,
-        )
+       try:
+    response = requests.post(
+        "https://overpass-api.de/api/interpreter",
+        data=query,
+        timeout=20,
+        headers={"User-Agent": "MoodPlacesApp/1.0"},
+    )
 
+    if response.status_code != 200:
+        return []
+
+    if not response.text.strip():
+        return []
+
+    data = response.json()
+
+except Exception as e:
+    print("Overpass API error:", e)
+    return []
         data = response.json()
 
         for item in data.get("elements", []):
