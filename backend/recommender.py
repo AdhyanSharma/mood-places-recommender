@@ -1,5 +1,6 @@
-from sentence_transformers import SentenceTransformer, util
 import requests
+from sentence_transformers import SentenceTransformer, util
+from learning import get_user_bonus
 
 # Load AI model once
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -11,6 +12,8 @@ MOOD_DESCRIPTIONS = {
     "adventure": "exciting outdoor exploration activities",
 }
 
+
+# Fetch nearby places from OpenStreetMap
 def fetch_nearby(lat, lon):
 
     query = f"""
@@ -25,7 +28,6 @@ def fetch_nearby(lat, lon):
     )
 
     data = response.json()
-
     places = []
 
     for item in data.get("elements", []):
@@ -43,7 +45,8 @@ def fetch_nearby(lat, lon):
     return places
 
 
-def get_places(mood, lat=None, lon=None):
+# Intelligent + learning recommender
+def get_places(mood, lat=None, lon=None, user="default"):
 
     if not lat or not lon:
         return []
@@ -52,22 +55,30 @@ def get_places(mood, lat=None, lon=None):
 
     mood_text = MOOD_DESCRIPTIONS.get(mood, "interesting places")
 
-    # Embed mood
-    mood_embedding = model.encode(mood_text, convert_to_tensor=True)
+    mood_embedding = model.encode(
+        mood_text, convert_to_tensor=True
+    )
 
     scored_places = []
 
     for place in places:
+
         place_embedding = model.encode(
             place["category"], convert_to_tensor=True
         )
 
-        score = util.cos_sim(mood_embedding, place_embedding).item()
+        base_score = util.cos_sim(
+            mood_embedding, place_embedding
+        ).item()
 
-        place["score"] = score
+        # learning bonus
+        bonus = get_user_bonus(user, place["category"])
+
+        final_score = base_score + (0.05 * bonus)
+
+        place["score"] = final_score
         scored_places.append(place)
 
-    # Rank intelligently
     scored_places.sort(key=lambda x: x["score"], reverse=True)
 
     return scored_places[:12]

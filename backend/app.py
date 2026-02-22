@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from recommender import get_places
 from textblob import TextBlob
+from recommender import get_places
+from learning import add_feedback
 
 app = FastAPI()
 
-# Allow frontend access
+# Allow frontend connection
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,23 +15,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Root
+
 @app.get("/")
 def home():
     return {"message": "Mood Places API Running"}
 
-# Health endpoint (for warmup + uptime robot)
+
+# health check (for warmup + uptime robot)
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# Recommend places
+
+# intelligent recommendation
 @app.get("/recommend/{mood}")
-def recommend(mood: str, lat: float = None, lon: float = None):
-    results = get_places(mood, lat, lon)
+def recommend(
+    mood: str,
+    lat: float = None,
+    lon: float = None,
+    user: str = "default",
+):
+    results = get_places(mood, lat, lon, user)
     return {"results": results}
 
-# AI Mood Detection
+
+# NLP mood detection
 @app.get("/detect_mood/{text}")
 def detect_mood(text: str):
 
@@ -44,3 +53,16 @@ def detect_mood(text: str):
         mood = "romantic"
 
     return {"mood": mood}
+
+
+# learning feedback
+@app.post("/feedback")
+def feedback(data: dict):
+
+    user = data.get("user", "default")
+    category = data.get("category")
+
+    if category:
+        add_feedback(user, category)
+
+    return {"message": "Preference learned"}
