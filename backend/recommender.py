@@ -1,47 +1,73 @@
+from sentence_transformers import SentenceTransformer, util
 import requests
 
-# Map mood → place categories
-MOOD_TAGS = {
-    "happy": ["cafe", "restaurant", "park"],
-    "sad": ["garden", "temple", "library"],
-    "romantic": ["restaurant", "viewpoint", "park"],
-    "adventure": ["trail", "hill", "park"]
+# Load AI model once
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+MOOD_DESCRIPTIONS = {
+    "happy": "fun lively energetic social places",
+    "sad": "calm peaceful quiet relaxing places",
+    "romantic": "beautiful scenic intimate places",
+    "adventure": "exciting outdoor exploration activities",
 }
+
+def fetch_nearby(lat, lon):
+
+    query = f"""
+    [out:json];
+    node(around:2000,{lat},{lon})["amenity"];
+    out;
+    """
+
+    response = requests.post(
+        "https://overpass-api.de/api/interpreter",
+        data=query,
+    )
+
+    data = response.json()
+
+    places = []
+
+    for item in data.get("elements", []):
+        name = item.get("tags", {}).get("name")
+        category = item.get("tags", {}).get("amenity")
+
+        if name and category:
+            places.append({
+                "name": name,
+                "category": category,
+                "image": f"https://source.unsplash.com/400x300/?{category}",
+                "map": f"https://maps.google.com/?q={item['lat']},{item['lon']}",
+            })
+
+    return places
+
 
 def get_places(mood, lat=None, lon=None):
 
     if not lat or not lon:
         return []
 
-    tags = MOOD_TAGS.get(mood.lower(), ["park"])
+    places = fetch_nearby(lat, lon)
 
-    places = []
+    mood_text = MOOD_DESCRIPTIONS.get(mood, "interesting places")
 
-    for tag in tags:
-        query = f"""
-        [out:json];
-        node
-          ["amenity"="{tag}"]
-          (around:2000,{lat},{lon});
-        out;
-        """
+    # Embed mood
+    mood_embedding = model.encode(mood_text, convert_to_tensor=True)
 
-        response = requests.post(
-            "https://overpass-api.de/api/interpreter",
-            data=query
+    scored_places = []
+
+    for place in places:
+        place_embedding = model.encode(
+            place["category"], convert_to_tensor=True
         )
 
-        data = response.json()
+        score = util.cos_sim(mood_embedding, place_embedding).item()
 
-        for item in data.get("elements", []):
+        place["score"] = score
+        scored_places.append(place)
 
-            name = item.get("tags", {}).get("name")
+    # Rank intelligently
+    scored_places.sort(key=lambda x: x["score"], reverse=True)
 
-            if name:
-                places.append({
-                    "name": name,
-                    "image": "https://source.unsplash.com/400x300/?place",
-                    "map": f"https://maps.google.com/?q={item['lat']},{item['lon']}"
-                })
-
-    return places[:12]  # limit results
+    return scored_places[:12]
