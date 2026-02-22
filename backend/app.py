@@ -38,3 +38,6 @@ def detect_mood(text: str):
         mood = "romantic"
 
     return {"mood": mood}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
