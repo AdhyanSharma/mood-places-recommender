@@ -1,100 +1,78 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from textblob import TextBlob
-from recommender import get_places
+from recommender import search_places, MOOD_QUERIES
+import math
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------------- STORAGE ----------------
 user_places = []
 ratings = {}
 reviews = {}
 
-# ---------------- BASIC ----------------
+# ---------------- DISTANCE ----------------
+def distance(lat1, lon1, lat2, lon2):
+    return math.sqrt((lat1-lat2)**2 + (lon1-lon2)**2)
 
-@app.get("/")
-def home():
-    return {"message": "Mood Places API Running"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-# ---------------- MOOD AI ----------------
-
+# ---------------- MOOD DETECTION ----------------
 @app.get("/detect_mood/{text}")
 def detect_mood(text: str):
 
-    polarity = TextBlob(text).sentiment.polarity
+    p = TextBlob(text).sentiment.polarity
 
-    if polarity > 0.3:
-        mood = "happy"
-    elif polarity < -0.3:
-        mood = "sad"
-    else:
-        mood = "romantic"
-
-    return {"mood": mood}
+    if p > 0.3:
+        return {"mood": "happy"}
+    elif p < -0.3:
+        return {"mood": "sad"}
+    return {"mood": "romantic"}
 
 # ---------------- RECOMMEND ----------------
-
 @app.get("/recommend/{mood}")
-def recommend(mood: str, lat: float = None, lon: float = None):
+def recommend(mood: str, lat: float, lon: float):
 
-    places = get_places(mood, lat, lon)
+    tags = MOOD_QUERIES.get(mood, ["park"])
 
-    all_places = places + user_places
+    places = search_places(lat, lon, tags)
 
-    # attach rating info
-    for p in all_places:
-        name = p["name"]
-        r = ratings.get(name, [])
+    # add user places nearby only
+    for p in user_places:
+        if distance(lat, lon, p["lat"], p["lon"]) < 0.05:
+            places.append(p)
+
+    # attach rating
+    for p in places:
+        r = ratings.get(p["name"], [])
         p["rating"] = round(sum(r)/len(r), 1) if r else 0
-        p["reviews"] = reviews.get(name, [])
+        p["reviews"] = reviews.get(p["name"], [])
 
-    return {"results": all_places}
+    return {"results": places[:15]}
 
-# ---------------- ADD PLACE ----------------
-
+# ---------------- ADD REAL PLACE ----------------
 @app.post("/add_place")
 def add_place(place: dict):
+
+    # require coordinates
+    if "lat" not in place or "lon" not in place:
+        return {"error": "Location required"}
+
     user_places.append(place)
-    return {"message": "Place added"}
+    return {"message": "Real place added"}
 
-# ---------------- ADD RATING ----------------
-
+# ---------------- RATE ----------------
 @app.post("/rate")
-def rate_place(data: dict):
+def rate(data: dict):
+    ratings.setdefault(data["name"], []).append(data["rating"])
+    return {"ok": True}
 
-    name = data["name"]
-    rating = float(data["rating"])
-
-    if name not in ratings:
-        ratings[name] = []
-
-    ratings[name].append(rating)
-
-    return {"message": "Rating added"}
-
-# ---------------- ADD REVIEW ----------------
-
+# ---------------- REVIEW ----------------
 @app.post("/review")
-def add_review(data: dict):
-
-    name = data["name"]
-    text = data["review"]
-
-    if name not in reviews:
-        reviews[name] = []
-
-    reviews[name].append(text)
-
-    return {"message": "Review added"}
+def review(data: dict):
+    reviews.setdefault(data["name"], []).append(data["review"])
+    return {"ok": True}

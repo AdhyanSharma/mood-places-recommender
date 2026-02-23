@@ -1,67 +1,53 @@
 import requests
 
-MOOD_TAGS = {
-    "happy": ["cafe", "restaurant", "park"],
-    "sad": ["park", "library", "place_of_worship"],
-    "romantic": ["restaurant", "park", "viewpoint"],
-    "adventure": ["park", "viewpoint", "museum", "attraction"],
+MOOD_QUERIES = {
+    "happy": ["cafe", "restaurant"],
+    "sad": ["park", "place_of_worship"],
+    "romantic": ["restaurant", "viewpoint"],
+    "adventure": ["tourism", "attraction", "viewpoint"],
 }
 
 
-def fetch_places(tag, lat, lon):
-
-    query = f"""
-    [out:json];
-    (
-      node(around:4000,{lat},{lon})["amenity"="{tag}"];
-      node(around:4000,{lat},{lon})["tourism"="{tag}"];
-      node(around:4000,{lat},{lon})["leisure"="{tag}"];
-    );
-    out;
-    """
-
-    try:
-        response = requests.post(
-            "https://overpass-api.de/api/interpreter",
-            data=query,
-            timeout=20,
-            headers={"User-Agent": "MoodPlacesApp/1.0"},
-        )
-
-        if response.status_code != 200 or not response.text.strip():
-            return []
-
-        data = response.json()
-
-    except Exception:
-        return []
-
-    results = []
-
-    for item in data.get("elements", []):
-        name = item.get("tags", {}).get("name")
-
-        if name:
-            results.append({
-                "name": name,
-                "category": tag,
-                "image": f"https://source.unsplash.com/400x300/?{tag}",
-                "map": f"https://maps.google.com/?q={item['lat']},{item['lon']}",
-            })
-
-    return results
-
-
-def get_places(mood, lat=None, lon=None):
-
-    if lat is None or lon is None:
-        return []
-
-    tags = MOOD_TAGS.get(mood.lower(), ["park"])
+def search_places(lat, lon, tags):
 
     places = []
 
     for tag in tags:
-        places.extend(fetch_places(tag, lat, lon))
+        query = f"""
+        [out:json];
+        (
+          node(around:3000,{lat},{lon})["amenity"="{tag}"];
+          node(around:3000,{lat},{lon})["tourism"="{tag}"];
+        );
+        out;
+        """
 
-    return places[:15]
+        try:
+            r = requests.post(
+                "https://overpass-api.de/api/interpreter",
+                data=query,
+                timeout=20,
+                headers={"User-Agent": "MoodPlacesApp"},
+            )
+
+            if not r.text.strip():
+                continue
+
+            data = r.json()
+
+        except:
+            continue
+
+        for el in data.get("elements", []):
+            name = el.get("tags", {}).get("name")
+
+            if name:
+                places.append({
+                    "name": name,
+                    "lat": el["lat"],
+                    "lon": el["lon"],
+                    "image": f"https://source.unsplash.com/400x300/?{tag}",
+                    "map": f"https://maps.google.com/?q={el['lat']},{el['lon']}",
+                })
+
+    return places
