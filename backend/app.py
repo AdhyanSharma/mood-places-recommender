@@ -2,11 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from textblob import TextBlob
 from recommender import get_places
-from learning import add_feedback
 
 app = FastAPI()
 
-# Allow frontend connection
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,31 +13,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------- STORAGE ----------------
+user_places = []
+ratings = {}
+reviews = {}
+
+# ---------------- BASIC ----------------
 
 @app.get("/")
 def home():
     return {"message": "Mood Places API Running"}
 
-
-# health check (for warmup + uptime robot)
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+# ---------------- MOOD AI ----------------
 
-# intelligent recommendation
-@app.get("/recommend/{mood}")
-def recommend(
-    mood: str,
-    lat: float = None,
-    lon: float = None,
-    user: str = "default",
-):
-    results = get_places(mood, lat, lon, user)
-    return {"results": results}
-
-
-# NLP mood detection
 @app.get("/detect_mood/{text}")
 def detect_mood(text: str):
 
@@ -54,15 +44,57 @@ def detect_mood(text: str):
 
     return {"mood": mood}
 
+# ---------------- RECOMMEND ----------------
 
-# learning feedback
-@app.post("/feedback")
-def feedback(data: dict):
+@app.get("/recommend/{mood}")
+def recommend(mood: str, lat: float = None, lon: float = None):
 
-    user = data.get("user", "default")
-    category = data.get("category")
+    places = get_places(mood, lat, lon)
 
-    if category:
-        add_feedback(user, category)
+    all_places = places + user_places
 
-    return {"message": "Preference learned"}
+    # attach rating info
+    for p in all_places:
+        name = p["name"]
+        r = ratings.get(name, [])
+        p["rating"] = round(sum(r)/len(r), 1) if r else 0
+        p["reviews"] = reviews.get(name, [])
+
+    return {"results": all_places}
+
+# ---------------- ADD PLACE ----------------
+
+@app.post("/add_place")
+def add_place(place: dict):
+    user_places.append(place)
+    return {"message": "Place added"}
+
+# ---------------- ADD RATING ----------------
+
+@app.post("/rate")
+def rate_place(data: dict):
+
+    name = data["name"]
+    rating = float(data["rating"])
+
+    if name not in ratings:
+        ratings[name] = []
+
+    ratings[name].append(rating)
+
+    return {"message": "Rating added"}
+
+# ---------------- ADD REVIEW ----------------
+
+@app.post("/review")
+def add_review(data: dict):
+
+    name = data["name"]
+    text = data["review"]
+
+    if name not in reviews:
+        reviews[name] = []
+
+    reviews[name].append(text)
+
+    return {"message": "Review added"}
