@@ -1,143 +1,128 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import json
-import os
+from deepface import DeepFace
+import base64
+import numpy as np
+import cv2
 
+# CREATE APP FIRST
 app = Flask(__name__)
+
+# THEN ENABLE CORS
 CORS(app)
 
-# ===============================
-# CONFIG
-# ===============================
-GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY"   # ← paste your key
-
-DB_FILE = "places_db.json"
-
-# ===============================
-# MOOD → PLACE TYPE MAP
-# ===============================
+# ---------------- MOOD → PLACE TYPES ----------------
 MOOD_MAP = {
     "happy": ["cafe", "restaurant", "park"],
-    "sad": ["park", "hindu_temple", "lake"],
-    "relaxed": ["spa", "museum", "garden"],
-    "excited": ["shopping_mall", "movie_theater"]
+    "sad": ["park", "temple"],
+    "relaxed": ["garden", "museum"],
+    "excited": ["mall", "cinema"]
 }
 
-# ===============================
-# DATABASE FUNCTIONS
-# ===============================
-def load_places():
-    if not os.path.exists(DB_FILE):
+# ---------------- OSM SEARCH ----------------
+def get_places(lat, lon, keyword):
+
+    query = f"""
+    [out:json][timeout:25];
+    (
+      node(around:3000,{lat},{lon})["amenity"="{keyword}"];
+      node(around:3000,{lat},{lon})["leisure"="{keyword}"];
+      node(around:3000,{lat},{lon})["tourism"="{keyword}"];
+    );
+    out;
+    """
+
+    # MULTIPLE SERVERS (fallback system)
+    servers = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter"
+    ]
+
+    data = None
+
+    for url in servers:
+        try:
+            print("Trying Overpass:", url)
+
+            response = requests.post(
+                url,
+                data=query,
+                headers={"User-Agent": "MoodPlacesApp"},
+                timeout=20
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                break
+
+        except Exception as e:
+            print("Server failed:", url)
+
+    if not data:
         return []
-    with open(DB_FILE, "r") as f:
-        return json.load(f)
-
-def save_places(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-# ===============================
-# GOOGLE PLACES API
-# ===============================
-def get_nearby_places(lat, lng, place_type):
-
-    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-
-    params = {
-        "location": f"{lat},{lng}",
-        "radius": 3000,
-        "type": place_type,
-        "key": GOOGLE_API_KEY
-    }
-
-    response = requests.get(url, params=params).json()
 
     places = []
 
-    for p in response.get("results", [])[:5]:
+    for p in data.get("elements", [])[:10]:
         places.append({
-            "name": p["name"],
-            "lat": p["geometry"]["location"]["lat"],
-            "lng": p["geometry"]["location"]["lng"],
-            "rating": p.get("rating", 0),
-            "source": "google"
+            "name": p.get("tags", {}).get("name", keyword.title()),
+            "lat": p["lat"],
+            "lng": p["lon"],
+            "rating": "N/A",
+            "photo": None
         })
 
     return places
 
-# ===============================
-# RECOMMEND ROUTE (FRONTEND MATCH)
-# ===============================
-@app.route("/recommend/<mood>", methods=["GET"])
-def recommend(mood):
+# ---------------- RECOMMEND ----------------
+@app.route("/recommend", methods=["POST"])
+def recommend():
 
-    lat = request.args.get("lat")
-    lng = request.args.get("lon")
+    data = request.json
 
-    if not lat or not lng:
-        return jsonify({"error": "Location missing"}), 400
-
-    lat = float(lat)
-    lng = float(lng)
-
-    print(f"Incoming mood: {mood}")
-    print(f"Location: {lat}, {lng}")
+    mood = data["mood"]
+    lat = float(data["lat"])
+    lon = float(data["lng"])
 
     types = MOOD_MAP.get(mood, ["cafe"])
 
     results = []
 
     for t in types:
-        api_places = get_nearby_places(lat, lng, t)
-        print(f"{t} -> {len(api_places)} places")
-        results.extend(api_places)
+        results.extend(get_places(lat, lon, t))
 
-    # add user places
-    results.extend(load_places())
+    return jsonify(results)
 
-    print("Total places:", len(results))
+# ---------------- AI MOOD ----------------
+@app.route("/detect_mood", methods=["POST"])
+def detect_mood():
 
-    return jsonify({"results": results})
+    image = request.json["image"].split(",")[1]
 
-# ===============================
-# ADD NEW PLACE
-# ===============================
-@app.route("/add_place", methods=["POST"])
-def add_place():
+    img_bytes = base64.b64decode(image)
+    arr = np.frombuffer(img_bytes, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
-    data = request.json
+    result = DeepFace.analyze(
+        img,
+        actions=["emotion"],
+        enforce_detection=False
+    )
 
-    places = load_places()
+    emotion = result[0]["dominant_emotion"]
 
-    data["rating"] = 0
-    data["source"] = "user"
+    mapping = {
+        "happy": "happy",
+        "sad": "sad",
+        "neutral": "relaxed",
+        "surprise": "excited"
+    }
 
-    places.append(data)
-    save_places(places)
+    mood = mapping.get(emotion, "happy")
 
-    return jsonify({"message": "Place added successfully"})
+    return jsonify({"mood": mood})
 
-# ===============================
-# RATE PLACE
-# ===============================
-@app.route("/rate", methods=["POST"])
-def rate_place():
-
-    data = request.json
-    places = load_places()
-
-    for p in places:
-        if p["name"] == data["name"]:
-            p["rating"] = data["rating"]
-
-    save_places(places)
-
-    return jsonify({"message": "Rating updated"})
-
-
-# ===============================
-# RUN SERVER
-# ===============================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
