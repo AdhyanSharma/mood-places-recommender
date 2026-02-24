@@ -1,106 +1,111 @@
-# 🌍 AI Mood-Based Intelligent Travel Recommender
+# 🌍 Mood Places Recommender (AI Powered)
 
-An AI-powered location-aware recommendation system that suggests nearby places based on user mood using NLP sentiment analysis, semantic embeddings, and self-learning personalization.
+An AI-powered web application that recommends **nearby places based on the user's mood** using facial emotion recognition and location-aware recommendations.
 
----
-
-## 🚀 Live Demo
-
-Frontend: https://YOUR-VERCEL-LINK  
-Backend API: https://mood-places-recommender.onrender.com
+This project combines **Computer Vision, AI, Full-Stack Development, and Geolocation Services** to create an intelligent real-world recommendation system.
 
 ---
 
-## 🧠 Project Overview
+## 🚀 Project Overview
 
-This project builds an intelligent recommendation engine that understands user emotions through text or voice input and recommends nearby locations dynamically.
+People often struggle to decide where to go when they feel stressed, bored, happy, or excited.
 
-Unlike traditional rule-based systems, this application uses:
+This application solves that problem by:
 
-- NLP sentiment analysis
-- Semantic similarity embeddings
-- Location-based search
-- Online learning from user feedback
-
-to continuously improve recommendations.
-
----
-
-## ✨ Features
-
-✅ Mood detection using NLP (TextBlob)  
-✅ Voice-based emotion input (Web Speech API)  
-✅ Location-aware recommendations  
-✅ Intelligent ranking using sentence embeddings  
-✅ Self-learning personalization system  
-✅ Real-time nearby place discovery (OpenStreetMap API)  
-✅ Backend warmup detection for cloud deployment  
-✅ Fully deployed cloud application
+✅ Detecting user mood using AI (facial emotion recognition)  
+✅ Allowing manual mood selection  
+✅ Finding nearby places using OpenStreetMap data  
+✅ Explaining *why* a place is recommended  
+✅ Showing locations on an interactive live map  
 
 ---
 
-## 🧱 Tech Stack
+## 🧠 Key Features
+
+- 🎭 **AI Mood Detection** using DeepFace
+- 😊 Manual Mood Selection Option
+- 📍 Nearby Place Recommendation
+- 🗺️ Interactive Map (React Leaflet)
+- 💡 Explainable AI Recommendations
+- 📏 Distance Calculation from User
+- 🔄 API Failover System (Reliable Backend)
+- 🎥 Optional Webcam Emotion Detection
+- ⚡ Real-time Recommendations
+
+---
+
+## 🏗️ System Architecture
+User → React Frontend → Flask API → AI Model + OpenStreetMap → Results → Map UI
+
+
+### Flow:
+1. User selects mood or uses webcam detection
+2. Frontend sends mood + location to backend
+3. Backend queries OpenStreetMap (Overpass API)
+4. AI logic maps mood → place types
+5. Results returned with explanation
+6. Map & cards display recommendations
+
+---
+
+## 🛠️ Tech Stack
 
 ### Frontend
 - React.js
-- Tailwind CSS
 - Axios
+- React Leaflet
+- HTML5 / CSS3
 
 ### Backend
-- FastAPI
 - Python
+- Flask
+- Flask-CORS
+- DeepFace (Emotion Recognition)
+- OpenCV
+- Requests API
 
-### AI / ML
-- Sentence Transformers
-- Semantic Similarity Ranking
-- NLP Sentiment Analysis
-
-### APIs
-- OpenStreetMap Overpass API
-- Google Maps Links
-
-### Deployment
-- Render (Backend)
-- Vercel (Frontend)
+### APIs & Data
+- OpenStreetMap (Overpass API)
+- Browser Geolocation API
 
 ---
 
-## ⚙️ System Architecture
-User (Voice/Text Mood)
-↓
-NLP Sentiment Detection
-↓
-User Location (GPS)
-↓
-Nearby Places API
-↓
-Sentence Embedding Model
-↓
-Similarity Scoring
-↓
-Learning Feedback Engine
-↓
-Personalized Recommendations
+## 📂 Project Structure
+mood-places-recommender/
+│
+├── backend/
+│ └── app.py
+│
+├── frontend/
+│ └── src/
+│ ├── App.js
+│ ├── MapView.js
+│ ├── EmotionDetector.js
+│ ├── api.js
+│ └── index.css
+│
+└── README.md
+
 
 ---
 
-## 🧩 How It Works
+## ⚙️ Installation & Setup
 
-1. User provides mood via text or voice.
-2. NLP analyzes emotional polarity.
-3. User location fetches nearby places.
-4. AI embeddings compare mood meaning with place categories.
-5. Recommendations are ranked by semantic similarity.
-6. User interactions are stored as feedback.
-7. Future results improve automatically.
-
----
-
-## 🖥️ Run Locally
-
-### Backend
+### 1️⃣ Clone Repository
 
 ```bash
+git clone https://github.com/YOUR_USERNAME/Mood_Places_Recommender.git
+cd Mood_Places_Recommender
+
+### Backend
 cd backend
-.\venv\Scripts\activate
-python -m uvicorn app:app --reload
+python -m venv ai_env
+ai_env\Scripts\activate
+pip install flask flask-cors requests deepface opencv-python numpy
+python app.py
+
+
+### frontend
+cd frontend
+npm install
+npm start
