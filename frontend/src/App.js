@@ -1,77 +1,117 @@
-import React,{useState} from "react";
+import React, { useState } from "react";
 import MapView from "./MapView";
 import EmotionDetector from "./EmotionDetector";
-import {API} from "./api";
+import { API } from "./api";
 import "./index.css";
 
-export default function App(){
+export default function App() {
+    const [mood, setMood] = useState("happy");
+    const [places, setPlaces] = useState([]);
+    const [reason, setReason] = useState("");
+    const [position, setPosition] = useState([21.1458, 79.0882]);
+    const [camera, setCamera] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-const [mood,setMood]=useState("happy");
-const [places,setPlaces]=useState([]);
-const [reason,setReason]=useState("");
-const [position,setPosition]=useState([21.1458,79.0882]);
-const [camera,setCamera]=useState(false);
-const [loading,setLoading]=useState(false);
+    const distance = (a, b, c, d) => {
+        const R = 6371;
+        const dLat = ((c - a) * Math.PI) / 180;
+        const dLon = ((d - b) * Math.PI) / 180;
+        const x =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((a * Math.PI) / 180) *
+            Math.cos((c * Math.PI) / 180) *
+            Math.sin(dLon / 2) ** 2;
+        return (R * (2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)))).toFixed(2);
+    };
 
-const distance=(a,b,c,d)=>{
- const R=6371;
- const dLat=(c-a)*Math.PI/180;
- const dLon=(d-b)*Math.PI/180;
- const x=Math.sin(dLat/2)**2+
- Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
- return (R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)))).toFixed(2);
-};
+    const fetchPlaces = async (selectedMood) => {
+        setLoading(true);
 
-const fetchPlaces=async(selectedMood)=>{
- setLoading(true);
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
 
- navigator.geolocation.getCurrentPosition(async(pos)=>{
-  const lat=pos.coords.latitude;
-  const lng=pos.coords.longitude;
+            setPosition([lat, lng]);
 
-  setPosition([lat,lng]);
+            try {
+                const res = await API.post("/recommend", { mood: selectedMood, lat, lng });
+                setPlaces(res.data.places);
+                setReason(res.data.reason);
+            } catch (err) {
+                console.error(err);
+                setReason("Could not retrieve places at this time.");
+            }
+            setLoading(false);
+        }, (err) => {
+            console.error("Location error:", err);
+            setLoading(false);
+            setReason("Please enable location services to find nearby places.");
+        });
+    };
 
-  const res=await API.post("/recommend",{mood:selectedMood,lat,lng});
+    return (
+        <div className="app-wrapper">
+            <h1 className="hero-title">Mood Places Recommender</h1>
+            <p className="hero-subtitle">
+                Discover the perfect spots around you that match exactly how you feel.
+            </p>
 
-  setPlaces(res.data.places);
-  setReason(res.data.reason);
-  setLoading(false);
- });
-};
+            <div className="controls-panel">
+                <select className="mood-select" value={mood} onChange={(e) => setMood(e.target.value)}>
+                    <option value="happy">😄 Happy</option>
+                    <option value="sad">😢 Sad</option>
+                    <option value="relaxed">🧘 Relaxed</option>
+                    <option value="excited">🔥 Excited</option>
+                </select>
 
-return(
-<div className="container">
+                <button className="primary-btn" onClick={() => fetchPlaces(mood)}>
+                    Find Places
+                </button>
+                <button className="secondary-btn" onClick={() => setCamera(!camera)}>
+                    {camera ? "Close Camera" : "🤖 Detect Mood"}
+                </button>
+            </div>
 
-<h1>🌍 Mood Places Recommender</h1>
+            {camera && <EmotionDetector onMood={(detected) => { setMood(detected); fetchPlaces(detected); }} />}
 
-<div className="controls">
-<select onChange={(e)=>setMood(e.target.value)}>
-<option value="happy">😄 Happy</option>
-<option value="sad">😢 Sad</option>
-<option value="relaxed">🧘 Relaxed</option>
-<option value="excited">🔥 Excited</option>
-</select>
+            {loading && (
+                <div className="loading-indicator">
+                    <div className="spinner"></div> Finding places for your vibe...
+                </div>
+            )}
 
-<button onClick={()=>fetchPlaces(mood)}>Recommend Places</button>
-<button onClick={()=>setCamera(!camera)}>🤖 Detect Mood</button>
-</div>
+            {reason && !loading && (
+                <div className="reason-box">
+                    <span className="reason-icon">💡</span>
+                    <div>{reason}</div>
+                </div>
+            )}
 
-{reason && <div className="reason">💡 {reason}</div>}
-{loading && <p>Finding nearby places...</p>}
-{camera && <EmotionDetector onMood={fetchPlaces}/>}
+            {!loading && places.length > 0 && (
+                <div className="content-grid">
+                    <div className="map-wrapper">
+                        <MapView places={places} position={position} />
+                    </div>
 
-<MapView places={places} position={position}/>
-
-<div className="cards">
-{places.map((p,i)=>(
-<div className="card" key={i}>
-<h3>{p.name}</h3>
-<p>📍 {distance(position[0],position[1],p.lat,p.lng)} km away</p>
-⭐ {p.rating}
-</div>
-))}
-</div>
-
-</div>
-);
+                    <div className="cards-list">
+                        {places.map((p, i) => (
+                            <div className="place-card" key={i}>
+                                <h3 className="place-name">{p.name}</h3>
+                                <div className="place-meta">
+                                    <div className="place-distance">
+                                        <span>📍</span> {distance(position[0], position[1], p.lat, p.lng)} km away
+                                    </div>
+                                    {p.rating && (
+                                        <div className="place-rating">
+                                            ★ {p.rating}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
